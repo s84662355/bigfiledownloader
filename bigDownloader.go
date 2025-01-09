@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -63,10 +62,7 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 
 	d.contentLen = contentLen
 	partSize := contentLen / int64(d.concurrency)
-	// 创建部分文件的存放目录
-	partDir := d.getPartDir(filename)
-	os.Mkdir(partDir, 0o777)
-	defer os.RemoveAll(partDir)
+
 	var wg sync.WaitGroup
 	wg.Add(d.concurrency)
 	var rangeStart int64 = 0
@@ -263,17 +259,6 @@ func (d *BigDownloader) merge(filename string, fileDatas [][]byte, partSize int6
 	}
 
 	return nil
-}
-
-// getPartDir 部分文件存放的目录
-func (d *BigDownloader) getPartDir(filename string) string {
-	return strings.SplitN(filename, ".", 2)[0]
-}
-
-// getPartFilename 构造部分文件的名字
-func (d *BigDownloader) getPartFilename(filename string, partNum int) string {
-	partDir := d.getPartDir(filename)
-	return fmt.Sprintf("%s/%s-%d", partDir, filename, partNum)
 }
 
 func (d *BigDownloader) setBar(length int64) {
