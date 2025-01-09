@@ -85,7 +85,6 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 	for i := 0; i < d.concurrency; i++ {
 		go func(i int, rangeStart int64) {
 			defer recover()
-
 			defer wg.Done()
 
 			rangeEnd := rangeStart + partSize
@@ -94,8 +93,7 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 				rangeEnd = contentLen
 			}
 
-			var downloaded int64 = 0
-			err := d.downloadPartial(destFile, strURL, rangeStart+downloaded, rangeEnd, i, partSize)
+			err := d.downloadPartial(destFile, strURL, rangeStart, rangeEnd, i, partSize)
 			if err != nil {
 				select {
 				case errChan <- err:
@@ -167,8 +165,6 @@ func (d *BigDownloader) downloadPartial(destFile *os.File, strURL string, rangeS
 		return err
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", rangeStart, rangeEnd-1))
-	client.Do(req)
-
 	resp, err := client.Do(req)
 	if err != nil {
 		d.isStop.Store(true)
@@ -177,10 +173,9 @@ func (d *BigDownloader) downloadPartial(destFile *os.File, strURL string, rangeS
 	defer resp.Body.Close()
 
 	seek := 0
-
 	buf := make([]byte, partSize)
 	for {
-		BigConn.SetDeadline(time.Now().Add(time.Second * 18)) // 设置发送接受数据超时
+		BigConn.SetDeadline(time.Now().Add(time.Second * 28)) // 设置发送接受数据超时
 		// 读取数据到缓冲区中
 		n, err := resp.Body.Read(buf)
 		if err != nil && err != io.EOF {
@@ -190,7 +185,6 @@ func (d *BigDownloader) downloadPartial(destFile *os.File, strURL string, rangeS
 		}
 		if n == 0 {
 			return nil
-			//	break
 		}
 
 		_, err = destFile.WriteAt(buf[:n], int64(i)*partSize+int64(seek))
