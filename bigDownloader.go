@@ -18,16 +18,16 @@ func Test() {
 	err := NewBigDownloader(38, func(ddd float64) {
 		fmt.Println(ddd)
 	}).Download(`https://sytg-browser.oss-ap-southeast-1.aliyuncs.com/CtrlFire-version/test/updateProgram6.66.zip`, "G:\\work\\windivert-go-main\\goproxy\\dddd.zip")
-   fmt.Println(err)
+	fmt.Println(err)
 }
 
 type BigDownloader struct {
-	concurrency int
-	contentLen int64
-	currentPercent func(float64)  
+	concurrency    int
+	contentLen     int64
+	currentPercent func(float64)
 	isStop         atomic.Bool
 	stopChan       chan interface{}
-	haveDownload atomic.Uint64
+	haveDownload   atomic.Uint64
 }
 
 func NewBigDownloader(concurrency int, currentPercent func(float64)) *BigDownloader {
@@ -177,7 +177,7 @@ func (d *BigDownloader) downloadPartial(strURL string, rangeStart int64, rangeEn
 	}
 	defer resp.Body.Close()
 
-	buf := make([]byte,partSize)
+	buf := make([]byte, partSize)
 	for {
 		BigConn.SetDeadline(time.Now().Add(time.Second * 18)) // 设置发送接受数据超时
 		// 读取数据到缓冲区中
@@ -213,7 +213,7 @@ func (d *BigDownloader) merge(filename string, fileDatas [][]byte, partSize int6
 		return errors.New(fmt.Sprint(destFile, err))
 	}
 	defer destFile.Close()
-	size := int64(d.contentLen)  
+	size := int64(d.contentLen)
 	err = destFile.Truncate(size)
 	if err != nil {
 		return err
@@ -231,9 +231,8 @@ func (d *BigDownloader) merge(filename string, fileDatas [][]byte, partSize int6
 
 	for i, fileData := range fileDatas {
 		go func(i int) {
-
 			defer wg.Done()
-defer recover()
+			defer recover()
 			if len(fileData) == 0 {
 				if isRun.CompareAndSwap(true, false) {
 					errChan <- errors.New(fmt.Sprint("数据部分", i, "数据长度为0"))
