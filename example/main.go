@@ -16,9 +16,9 @@ func main(){
 
 
 
- 	err := ddd.Download(`https://sytg-browser.oss-ap-southeast-1.aliyuncs.com/CtrlFire-version/test/updateProgram6.66.zip`, "E:\\bigfiledownloader\\Download\\bigfiledownloader.zip")
+ 	err := ddd.Download(`https://sytg-xxxxxxxxxxxxxxxom/Ctrxxxversion/testxxogram6.66.zip`, "E:\\bigfiledownloader\\Download\\bigfiledownloader.zip")
    	log.Println(err) 
- 	err = ddd.Download(`https://sytg-browser.oss-ap-southeast-1.aliyuncs.com/CtrlFire-version/test/updateProgram6.66.zip`, "E:\\bigfiledownloader\\Download\\bigfiledownloader.zip")
+ 	err = ddd.Download(`https://sytxxxxxxxcom/Ctxxxxxxsion/test/updxxam6.66.zip`, "E:\\bigfiledownloader\\Download\\bigfixxxxder.zip")
    	log.Println(err)
 
 }
