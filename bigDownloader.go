@@ -109,7 +109,7 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 		default:
 		}
 	}
-
+    d.isStop.Store(true)
 	if err := d.merge(filename, fileDatas, partSize); err != nil {
 		return err
 	}
