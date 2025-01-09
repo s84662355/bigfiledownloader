@@ -13,13 +13,6 @@ import (
 	"time"
 )
 
-func Test() {
-	err := NewBigDownloader(38, func(ddd float64) {
-		fmt.Println(ddd)
-	}).Download(`https://sytg-browser.oss-ap-southeast-1.aliyuncs.com/CtrlFire-version/test/updateProgram6.66.zip`, "G:\\work\\windivert-go-main\\goproxy\\dddd.zip")
-	fmt.Println(err)
-}
-
 type BigDownloader struct {
 	concurrency    int
 	contentLen     int64
@@ -39,7 +32,7 @@ func (d *BigDownloader) Download(strURL, filename string) error {
 	if !d.isStop.CompareAndSwap(true, false) {
 		return errors.New("正在下载")
 	}
-	defer    d.isStop.Store(true)
+	defer d.isStop.Store(true)
 	if filename == "" {
 		filename = path.Base(strURL)
 	}
@@ -58,7 +51,7 @@ func (d *BigDownloader) Download(strURL, filename string) error {
 	return errors.New("请求失败或者缺少Accept-Ranges头部")
 }
 
-func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64) error {
+func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64) (err error) {
 	d.setBar(contentLen)
 
 	d.contentLen = contentLen
@@ -68,10 +61,27 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 	wg.Add(d.concurrency)
 	var rangeStart int64 = 0
 
-	fileDatas := make([][]byte, d.concurrency)
-
 	errChan := make(chan error, 1)
 	defer close(errChan)
+
+	destFile, err := os.OpenFile(filename, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o777)
+	if err != nil {
+		return errors.New(fmt.Sprint(destFile, err))
+	}
+
+	defer func() {
+		if err != nil {
+			os.Remove(filename)
+		}
+	}()
+
+	defer destFile.Close()
+
+	err = destFile.Truncate(contentLen)
+	if err != nil {
+		return err
+	}
+
 	for i := 0; i < d.concurrency; i++ {
 		go func(i int, rangeStart int64) {
 			defer recover()
@@ -85,15 +95,11 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 			}
 
 			var downloaded int64 = 0
-			fileData, err := d.downloadPartial(strURL, rangeStart+downloaded, rangeEnd, i, partSize)
+			err := d.downloadPartial(destFile, strURL, rangeStart+downloaded, rangeEnd, i, partSize)
 			if err != nil {
 				select {
 				case errChan <- err:
 				default:
-				}
-			} else {
-				if len(fileData) > 0 {
-					fileDatas[i] = fileData
 				}
 			}
 		}(i, rangeStart)
@@ -110,10 +116,6 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 		default:
 		}
 	}
- 
-	if err := d.merge(filename, fileDatas, partSize); err != nil {
-		return err
-	}
 
 	fileInfo, err := os.Stat(filename)
 	if err != nil {
@@ -128,9 +130,9 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 	return nil
 }
 
-func (d *BigDownloader) downloadPartial(strURL string, rangeStart int64, rangeEnd int64, i int, partSize int64) ([]byte, error) {
+func (d *BigDownloader) downloadPartial(destFile *os.File, strURL string, rangeStart int64, rangeEnd int64, i int, partSize int64) error {
 	if rangeStart >= rangeEnd {
-		return nil, errors.New("rangeStart>=rangeEnd")
+		return errors.New("rangeStart>=rangeEnd")
 	}
 
 	fileData := make([]byte, 0, partSize)
@@ -162,7 +164,7 @@ func (d *BigDownloader) downloadPartial(strURL string, rangeStart int64, rangeEn
 	req, err := http.NewRequest("GET", strURL, nil)
 	if err != nil {
 		d.isStop.Store(true)
-		return nil, err
+		return err
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", rangeStart, rangeEnd-1))
 	client.Do(req)
@@ -170,9 +172,11 @@ func (d *BigDownloader) downloadPartial(strURL string, rangeStart int64, rangeEn
 	resp, err := client.Do(req)
 	if err != nil {
 		d.isStop.Store(true)
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
+
+	seek := 0
 
 	buf := make([]byte, partSize)
 	for {
@@ -182,81 +186,29 @@ func (d *BigDownloader) downloadPartial(strURL string, rangeStart int64, rangeEn
 		if err != nil && err != io.EOF {
 			d.isStop.Store(true)
 			// 处理读取错误
-			return nil, err
+			return err
 		}
 		if n == 0 {
-			return fileData, nil
+			return nil
 			//	break
 		}
 
-		fileData = append(fileData, buf[:n]...)
+		_, err = destFile.WriteAt(buf[:n], int64(i)*partSize+int64(seek))
+		if err != nil {
+			return errors.New(fmt.Sprint("写入文件失败", err))
+		}
+
+		seek += n
+
 		d.haveDownload.Add(uint64(n))
 		if int64(len(fileData)) >= partSize {
-			return fileData, nil
+			return nil
 		}
 
 		if d.isStop.Load() {
 			break
 		}
 
-	}
-
-	return nil, nil
-}
-
-func (d *BigDownloader) merge(filename string, fileDatas [][]byte, partSize int64) error {
-	destFile, err := os.OpenFile(filename, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o777)
-	if err != nil {
-		return errors.New(fmt.Sprint(destFile, err))
-	}
-	defer destFile.Close()
-	size := int64(d.contentLen)
-	err = destFile.Truncate(size)
-	if err != nil {
-		return err
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(len(fileDatas))
-
-	var isRun atomic.Bool
-
-	isRun.Store(true)
-
-	errChan := make(chan error, 1)
-	close(errChan)
-
-	for i, fileData := range fileDatas {
-		go func(i int) {
-			defer wg.Done()
-			defer recover()
-			if len(fileData) == 0 {
-				if isRun.CompareAndSwap(true, false) {
-					errChan <- errors.New(fmt.Sprint("数据部分", i, "数据长度为0"))
-				}
-				return
-			}
-
-			if isRun.Load() {
-				_, err := destFile.WriteAt(fileData[:], int64(i)*partSize)
-				if err != nil {
-					if isRun.CompareAndSwap(true, false) {
-						errChan <- errors.New(fmt.Sprint("数据部分", i, err))
-					}
-				}
-			}
-		}(i)
-	}
-
-	wg.Wait()
-
-	select {
-	case err := <-errChan:
-
-		if err != nil {
-			return err
-		}
-	default:
 	}
 
 	return nil
