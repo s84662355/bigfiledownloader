@@ -39,6 +39,7 @@ func (d *BigDownloader) Download(strURL, filename string) error {
 	if !d.isStop.CompareAndSwap(true, false) {
 		return errors.New("正在下载")
 	}
+	defer    d.isStop.Store(true)
 	if filename == "" {
 		filename = path.Base(strURL)
 	}
@@ -109,7 +110,7 @@ func (d *BigDownloader) multiDownload(strURL, filename string, contentLen int64)
 		default:
 		}
 	}
-    d.isStop.Store(true)
+ 
 	if err := d.merge(filename, fileDatas, partSize); err != nil {
 		return err
 	}

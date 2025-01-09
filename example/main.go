@@ -9,8 +9,16 @@ import (
 
 func main(){
 	os.Mkdir("E:\\bigfiledownloader\\Download", 0o777)
- 	err := bigfiledownloader.NewBigDownloader(38, func(d  float64) {
+
+	ddd:=bigfiledownloader.NewBigDownloader(38, func(d  float64) {
 		log.Printf("下载进度: %.2f%%",100*d) 
-	}).Download(`https://sytxxxxxxxxxxxxxxxyuncs.com/Ctrxxxxxxxsion/test/upxxxx6.66.zip`, "E:\\bigfiledownloader\\Download\\bigfiledownloader.zip")
+	}) 
+
+
+
+ 	err := ddd.Download(`https://sytg-browser.oss-ap-southeast-1.aliyuncs.com/CtrlFire-version/test/updateProgram6.66.zip`, "E:\\bigfiledownloader\\Download\\bigfiledownloader.zip")
+   	log.Println(err) 
+ 	err = ddd.Download(`https://sytg-browser.oss-ap-southeast-1.aliyuncs.com/CtrlFire-version/test/updateProgram6.66.zip`, "E:\\bigfiledownloader\\Download\\bigfiledownloader.zip")
    	log.Println(err)
+
 }
