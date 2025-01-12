@@ -18,7 +18,7 @@ type BigDownloader struct {
 	contentLen     int64
 	currentPercent func(float64)
 	isStop         atomic.Bool
-	stopChan       chan interface{}
+	stopChan       chan struct{}
 	haveDownload   atomic.Uint64
 }
 
@@ -40,7 +40,7 @@ func (d *BigDownloader) Download(strURL, filename string) error {
 	if err != nil {
 		return err
 	}
-	d.stopChan = make(chan interface{})
+	d.stopChan = make(chan struct{})
 	defer close(d.stopChan)
 
 	d.haveDownload.Store(0)
