@@ -87,6 +87,10 @@ func (d *BigDownloader) Download(
 	d.haveDownload.Store(0)
 	// 检查响应状态码是否为 200 且服务器支持范围请求
 	if resp.StatusCode == http.StatusOK && resp.Header.Get("Accept-Ranges") == "bytes" {
+		if resp.ContentLength < 1 {
+			return fmt.Errorf("内容长度为0")
+		}
+
 		// 关闭响应体
 		resp.Body.Close()
 		// 调用 multiDownload 方法进行并发下载
@@ -148,12 +152,8 @@ func (d *BigDownloader) multiDownload(
 	)
 
 	// 启动进度条更新协程
-	done := d.setBar()
 	// 确保在函数结束时等待进度条更新协程退出
-	defer func() {
-		for range done {
-		}
-	}()
+	defer d.setBar()()
 
 	// 启动多个 goroutine 并发下载文件的不同部分
 	for i := 0; i < d.concurrency; i++ {
@@ -278,7 +278,7 @@ func (d *BigDownloader) downloadcopy(
 }
 
 // setBar 方法用于启动一个协程，定期更新下载进度
-func (d *BigDownloader) setBar() <-chan struct{} {
+func (d *BigDownloader) setBar() func() {
 	// 创建一个用于通知协程退出的通道
 	done := make(chan struct{})
 
@@ -308,5 +308,8 @@ func (d *BigDownloader) setBar() <-chan struct{} {
 		}
 	}()
 
-	return done
+	return func() {
+		for range done {
+		}
+	}
 }

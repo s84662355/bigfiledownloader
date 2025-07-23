@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// go test   -run TestDown 
+// go test   -run TestDown
 func TestDown(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 5*60*time.Second)
 	err := NewBigDownloader(5, func(ddd float64) {
@@ -16,7 +16,7 @@ func TestDown(t *testing.T) {
 	fmt.Println(err)
 }
 
-// go test -run TestDownPng 
+// go test -run TestDownPng
 func TestDownPng(t *testing.T) {
 	err := NewBigDownloader(2, func(ddd float64) {
 		fmt.Println(ddd)
