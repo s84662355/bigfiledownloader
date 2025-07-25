@@ -36,6 +36,8 @@ type BigDownloader struct {
 	haveDownload atomic.Uint64
 	// 标记下载是否正在进行，使用原子操作保证并发安全
 	isSart atomic.Bool
+
+	concurrencyTmp int
 }
 
 // NewBigDownloader 创建一个新的 BigDownloader 实例
@@ -143,9 +145,15 @@ func (d *BigDownloader) multiDownload(
 		return fmt.Errorf("destFile Truncate err:%w", err)
 	}
 
+	d.concurrencyTmp = d.concurrency
+
+	if int64(d.concurrencyTmp) > contentLen {
+		d.concurrencyTmp = 1
+	}
+
 	// 计算每个部分的大小
 	var (
-		partSize         = contentLen / int64(d.concurrency)
+		partSize         = contentLen / int64(d.concurrencyTmp)
 		rangeStart int64 = 0
 		// 创建一个带有错误组的上下文，用于管理多个 goroutine 的错误
 		wg, ctx = errgroup.WithContext(pCtx)
@@ -156,7 +164,7 @@ func (d *BigDownloader) multiDownload(
 	defer d.setBar()()
 
 	// 启动多个 goroutine 并发下载文件的不同部分
-	for i := 0; i < d.concurrency; i++ {
+	for i := 0; i < d.concurrencyTmp; i++ {
 		ii := i
 		rangeStartt := rangeStart
 		wg.Go(func() error {
@@ -199,7 +207,7 @@ func (d *BigDownloader) downloadPartial(
 	// 计算当前部分的结束位置
 	rangeEnd := rangeStart + partSize
 	// 如果是最后一个部分，则结束位置为文件的总长度
-	if i == d.concurrency-1 {
+	if i == d.concurrencyTmp-1 {
 		rangeEnd = d.contentLen
 	}
 	// 创建一个新的下载连接
