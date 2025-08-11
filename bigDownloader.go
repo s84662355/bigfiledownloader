@@ -161,7 +161,8 @@ func (d *BigDownloader) multiDownload(
 
 	// 启动进度条更新协程
 	// 确保在函数结束时等待进度条更新协程退出
-	defer d.setBar()()
+	c:=d.setBar()
+	defer  c()
 
 	// 启动多个 goroutine 并发下载文件的不同部分
 	for i := 0; i < d.concurrencyTmp; i++ {
