@@ -1,28 +1,19 @@
 package bigfiledownloader
 
 import (
-	// 用于创建和管理上下文，控制请求的生命周期
-	"context"
-	// 用于格式化输出信息
+	"context" 
 	"fmt"
-	// 用于处理输入输出操作
 	"io"
-	// 用于进行数学运算
 	"math"
-	// 用于发起 HTTP 请求
 	"net/http"
-	// 用于操作文件系统
 	"os"
-	// 用于处理文件路径
 	"path"
-	// 用于实现原子操作，保证并发安全
 	"sync/atomic"
-	// 用于处理时间相关操作，如计时、延迟等
 	"time"
-
-	// 用于实现错误组，管理多个 goroutine 的错误
 	"golang.org/x/sync/errgroup"
 )
+
+ 
 
 // BigDownloader 结构体表示一个大文件下载器，包含并发数、文件总长度、下载进度回调函数等信息
 type BigDownloader struct {
@@ -69,7 +60,7 @@ func (d *BigDownloader) Download(
 ) error {
 	// 检查下载是否已经在进行中，如果是则返回错误
 	if !d.isSart.CompareAndSwap(false, true) {
-		return fmt.Errorf("正在下载")
+		return ErrDownloading
 	}
 	// 确保在下载完成后标记下载未开始
 	defer d.isSart.Store(false)
@@ -81,7 +72,7 @@ func (d *BigDownloader) Download(
 	// 发送 HTTP HEAD 请求，获取文件信息
 	resp, err := http.Head(strURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrCreateConnectionFailed, err)
 	}
 	// 确保在函数结束时关闭响应体
 	defer resp.Body.Close()
@@ -90,7 +81,7 @@ func (d *BigDownloader) Download(
 	// 检查响应状态码是否为 200 且服务器支持范围请求
 	if resp.StatusCode == http.StatusOK && resp.Header.Get("Accept-Ranges") == "bytes" {
 		if resp.ContentLength < 1 {
-			return fmt.Errorf("内容长度为0")
+			return ErrContentLengthZero
 		}
 
 		// 关闭响应体
@@ -107,7 +98,7 @@ func (d *BigDownloader) Download(
 		return err
 	}
 
-	return fmt.Errorf("请求失败或者缺少Accept-Ranges头部")
+	return ErrMissingAcceptRanges
 }
 
 // multiDownload 方法用于并发下载大文件，将文件分成多个部分进行下载
@@ -127,7 +118,7 @@ func (d *BigDownloader) multiDownload(
 	// 打开或创建目标文件，用于保存下载的内容
 	destFile, err := os.OpenFile(filename, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("OpenFile 文件%s失败 err = %w", filename, err)
+		return fmt.Errorf("%w '%s': %v", ErrOpenFileFailed, filename, err)
 	}
 
 	// 下载失败就删除文件
@@ -142,7 +133,7 @@ func (d *BigDownloader) multiDownload(
 
 	// 调整文件大小为文件的总长度
 	if err := destFile.Truncate(contentLen); err != nil {
-		return fmt.Errorf("destFile Truncate err:%w", err)
+		return fmt.Errorf("%w: %v", ErrFileTruncateFailed, err)
 	}
 
 	d.concurrencyTmp = d.concurrency
@@ -184,7 +175,7 @@ func (d *BigDownloader) multiDownload(
 
 	// 等待所有 goroutine 完成，并检查是否有错误
 	if err := wg.Wait(); err != nil {
-		return fmt.Errorf("下载 errChan err:%w", err)
+		return fmt.Errorf("%w: %v", ErrDownloadPartialFailed, err)
 	}
 
 	return nil
@@ -220,7 +211,7 @@ func (d *BigDownloader) downloadPartial(
 		60*time.Second,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", ErrDownloadPartialFailed, err)
 	}
 	// 确保在函数结束时关闭连接
 	defer conn.Close()
@@ -247,7 +238,7 @@ func (d *BigDownloader) newDownConn(
 ) (io.ReadCloser, error) {
 	// 检查下载范围是否合法
 	if rangeStart >= rangeEnd {
-		return nil, fmt.Errorf("rangeStart>=rangeEnd")
+		return nil, ErrInvalidRange
 	}
 
 	// 创建一个新的下载读取器
@@ -259,9 +250,9 @@ func (d *BigDownloader) newDownConn(
 		readTimeOut,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create new conn err = %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrCreateConnectionFailed, err)
 	}
-	return conn, err
+	return conn, nil
 }
 
 // downloadcopy 方法用于将下载的内容复制到目标文件中
@@ -283,7 +274,10 @@ func (d *BigDownloader) downloadcopy(
 		})
 	// 将下载的内容从连接复制到写入器中
 	_, err := io.Copy(writer, conn)
-	return err
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrDownloadPartialFailed, err)
+	}
+	return nil
 }
 
 // setBar 方法用于启动一个协程，定期更新下载进度

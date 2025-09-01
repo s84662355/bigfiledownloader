@@ -1,19 +1,15 @@
 package bigfiledownloader
 
 import (
-	// 用于创建和管理上下文，控制请求的生命周期
-	"context"
-	// 用于格式化输出信息
+	"context" 
 	"fmt"
-	// 用于处理输入输出操作
 	"io"
-	// 用于网络操作，如建立连接、读写数据等
 	"net"
-	// 用于发起 HTTP 请求
 	"net/http"
-	// 用于处理时间相关操作，如计时、延迟等
 	"time"
 )
+
+ 
 
 // downReader 结构体表示一个用于下载文件的读取器，封装了下载所需的上下文、URL、范围和超时时间等信息
 type downReader struct {
@@ -76,7 +72,7 @@ func newDownReader(
 	req, err := http.NewRequestWithContext(pCtx, "GET", strURL, nil)
 	if err != nil {
 		dc.client.CloseIdleConnections()
-		return nil, fmt.Errorf("new request err:%w", err)
+		return nil, fmt.Errorf("%w: %v", ErrCreateRequestFailed, err)
 	}
 	// 设置请求头，指定下载范围
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", rangeStart, rangeEnd-1))
@@ -84,7 +80,7 @@ func newDownReader(
 	resp, err := dc.client.Do(req)
 	if err != nil {
 		dc.client.CloseIdleConnections()
-		return nil, fmt.Errorf("client Do err:%w", err)
+		return nil, fmt.Errorf("%w: %v", ErrRequestFailed, err)
 	}
 
 	// 将响应体赋值给 downReader 实例
@@ -113,12 +109,12 @@ func (dc *downReader) Read(p []byte) (n int, err error) {
 	case <-dc.timer.C:
 		dc.Close()
 		<-dc.resChan
-		return 0, fmt.Errorf("读取数据流超时")
+		return 0, ErrReadTimeout
 	// 上下文被取消，关闭读取器并返回错误
 	case <-dc.ctx.Done():
 		dc.Close()
 		<-dc.resChan
-		return 0, fmt.Errorf("上下文读写超时")
+		return 0, ErrContextTimeout
 	// 收到读取结果，将数据复制到缓冲区并返回
 	case <-dc.resChan:
 		return
